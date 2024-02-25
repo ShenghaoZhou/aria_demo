@@ -1,8 +1,11 @@
+#!/usr/bin/env python
 import rospy
 from sensor_msgs.msg import Imu
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import aria.sdk as aria
+from common import ctrl_c_handler
+import numpy as np
 
 def create_img_msg(bridge, aria_img_data, timestamp):
     # Convert the image to a ROS Image message
@@ -32,7 +35,7 @@ def create_imu_msg(aria_imu_data):
     return imu_msg
 
 
-def setup_streamline_manager(streaming_interface='usb', profile_name='profile12'):
+def setup_streaming_manager(streaming_interface='usb', profile_name='profile12'):
     device_client = aria.DeviceClient()
 
     client_config = aria.DeviceClientConfig()
@@ -47,11 +50,13 @@ def setup_streamline_manager(streaming_interface='usb', profile_name='profile12'
     if streaming_interface == "usb":
         streaming_config.streaming_interface = aria.StreamingInterface.Usb
     streaming_config.security_options.use_ephemeral_certs = True
-    streaming_manager.start_streaming()
     streaming_manager.streaming_config = streaming_config
+    
+    streaming_manager.start_streaming()
+
     streaming_state = streaming_manager.streaming_state
     print(f"Streaming state: {streaming_state}")
-    return streaming_manager
+    return streaming_manager, device_client, device
 
 
 class DataQueuingObserver:
@@ -82,26 +87,39 @@ def setup_ros_node(freq=10):
 
 def main():
 
-    pub_imu, pub_img, bridge, rate = setup_ros_node(freq=1000)
+    pub_imu, pub_img, bridge, rate = setup_ros_node(freq=1500)
 
-    streamline_manager = setup_streamline_manager()
+    streaming_manager, device_client, device = setup_streaming_manager()
 
     observer = DataQueuingObserver()
-    streaming_client = streamline_manager.streaming_client
+    streaming_client = streaming_manager.streaming_client
     streaming_client.set_streaming_client_observer(observer)
     streaming_client.subscribe()
 
+    print('publish ros message')
     # Main loop for ROS 
-    while not rospy.is_shutdown():
-        if observer.img_data is not None:
-            img_msg = create_img_msg(bridge, observer.img_data)
-            pub_img.publish(img_msg)
-            observer.img_data = None
-        elif observer.imu_data is not None:
-            for imu_data in observer.imu_data:
-                imu_msg = create_imu_msg(imu_data)
-                pub_imu.publish(imu_msg)
-            observer.imu_data = None
-            
-        # Sleep for the remaining time to hit our 10hz publish rate
-        rate.sleep()
+    with ctrl_c_handler() as ctrl_c:
+        while not (rospy.is_shutdown() or ctrl_c):
+            if observer.img_data is not None:
+                img_data, timestamp, camera_id = observer.img_data
+                if camera_id == aria.CameraId.Slam1:
+                    img_msg = create_img_msg(bridge, np.rot90(img_data, -1), timestamp)
+                    pub_img.publish(img_msg)
+                    observer.img_data = None
+            elif observer.imu_data is not None:
+                imu_data_batch, imu_idx = observer.imu_data
+                if imu_idx == 0:
+                    for imu_data in imu_data_batch:
+                        imu_msg = create_imu_msg(imu_data)
+                        pub_imu.publish(imu_msg)
+                    observer.imu_data = None
+                
+            # Sleep for the remaining time to hit our 10hz publish rate
+            rate.sleep()
+    print("Stop listening to image data")
+    streaming_client.unsubscribe()
+    streaming_manager.stop_streaming()
+    device_client.disconnect(device)
+
+if __name__ == "__main__":
+    main()
