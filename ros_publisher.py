@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import rospy
 from sensor_msgs.msg import Imu
 from sensor_msgs.msg import Image
@@ -10,10 +10,9 @@ import numpy as np
 
 def create_img_msg(bridge, aria_img_data, timestamp):
     # Convert the image to a ROS Image message
-    img_msg = bridge.cv2_to_imgmsg(aria_img_data, encoding="passthrough")
+    img_msg = bridge.cv2_to_imgmsg(aria_img_data, encoding="mono8")
     img_msg.header.stamp = rospy.Time.from_sec(timestamp / 1e9)
     return img_msg
-
 
 def create_imu_msg(aria_imu_data):
 
@@ -53,16 +52,15 @@ def setup_streaming_manager(streaming_interface='usb', profile_name='profile12')
     if streaming_interface == "usb":
         streaming_config.streaming_interface = aria.StreamingInterface.Usb
     streaming_config.security_options.use_ephemeral_certs = True
-
     streaming_manager.streaming_config = streaming_config
-
+    
     streaming_manager.start_streaming()
 
     streaming_state = streaming_manager.streaming_state
     print(f"Streaming state: {streaming_state}")
     return streaming_manager, device_client, device
 
-# proposal: keep a list of data
+
 class DataQueuingObserver:
     def __init__(self, pub_img, pub_imu, bridge):
         self.img_data = None
@@ -89,28 +87,27 @@ class DataQueuingObserver:
                 imu_msg = create_imu_msg(imu_data)
                 self.pub_imu.publish(imu_msg)
 
-
 def setup_ros_node(freq=10):
     # Initialize the ROS node
     rospy.init_node('aria_publisher_node', anonymous=True)
 
     # Create a publisher object
-    pub_imu = rospy.Publisher('imu_data', Imu, queue_size=1000)
-    pub_img = rospy.Publisher('camera_image', Image, queue_size=1000)
+    pub_imu = rospy.Publisher('imu_left', Imu, queue_size=1000)
+    pub_img_left = rospy.Publisher('camera_slam_left', Image, queue_size=50)
+    pub_img_right = rospy.Publisher('camera_slam_right', Image, queue_size=50)
 
     bridge = CvBridge()
     # Set the rate of publishing
-    rate = rospy.Rate(freq)  # 10hz
-    return pub_imu, pub_img, bridge, rate
-
+    rate = rospy.Rate(freq) # 10hz
+    return pub_imu, pub_img_left, pub_img_right, bridge, rate
 
 def main():
 
-    pub_imu, pub_img, bridge, rate = setup_ros_node(freq=10)
+    pub_imu, pub_img_left, pub_img_right, bridge, rate = setup_ros_node(freq=10)
 
     streaming_manager, device_client, device = setup_streaming_manager()
 
-    observer = DataQueuingObserver(pub_img, pub_imu, bridge)
+    observer = DataQueuingObserver(pub_img_left, pub_imu, bridge)
     streaming_client = streaming_manager.streaming_client
     config = streaming_client.subscription_config
     config.subscriber_data_type = (
