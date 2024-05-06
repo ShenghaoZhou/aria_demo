@@ -62,10 +62,11 @@ def setup_streaming_manager(streaming_interface='usb', profile_name='profile12')
 
 
 class DataQueuingObserver:
-    def __init__(self, pub_img, pub_imu, bridge):
+    def __init__(self, pub_img_left, pub_img_right, pub_imu, bridge):
         self.img_data = None
         self.imu_data = None
-        self.pub_img = pub_img
+        self.pub_img_left = pub_img_left
+        self.pub_img_right = pub_img_right
         self.pub_imu = pub_imu
         self.bridge = bridge
 
@@ -76,7 +77,11 @@ class DataQueuingObserver:
         if camera_id == aria.CameraId.Slam1:
             img_msg = create_img_msg(
                 self.bridge, np.rot90(image, -1), timestamp)
-            self.pub_img.publish(img_msg)
+            self.pub_img_left.publish(img_msg)
+        elif camera_id == aria.CameraId.Slam2:
+            img_msg = create_img_msg(
+                self.bridge, np.rot90(image, -1), timestamp)
+            self.pub_img_right.publish(img_msg)
 
 
     def on_imu_received(self, samples, imu_idx):
@@ -107,7 +112,7 @@ def main():
 
     streaming_manager, device_client, device = setup_streaming_manager()
 
-    observer = DataQueuingObserver(pub_img_left, pub_imu, bridge)
+    observer = DataQueuingObserver(pub_img_left, pub_img_right, pub_imu, bridge)
     streaming_client = streaming_manager.streaming_client
     config = streaming_client.subscription_config
     config.subscriber_data_type = (
