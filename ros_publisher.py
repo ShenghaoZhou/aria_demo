@@ -37,6 +37,7 @@ def create_imu_msg(aria_imu_data):
 
 
 def setup_streaming_manager(streaming_interface='usb', profile_name='profile12'):
+    # profile 12 is the recommended profile for streaming without audio
     device_client = aria.DeviceClient()
 
     client_config = aria.DeviceClientConfig()
@@ -48,7 +49,7 @@ def setup_streaming_manager(streaming_interface='usb', profile_name='profile12')
 
     streaming_config = aria.StreamingConfig()
     streaming_config.profile_name = profile_name
-    # Note: by default streaming uses Wifi
+    
     if streaming_interface == "usb":
         streaming_config.streaming_interface = aria.StreamingInterface.Usb
     streaming_config.security_options.use_ephemeral_certs = True
@@ -62,6 +63,11 @@ def setup_streaming_manager(streaming_interface='usb', profile_name='profile12')
 
 
 class DataQueuingObserver:
+    """
+    Observer provides callback functions that directly publish received data to 
+    corresponding ROS topics. 
+    The queue size is taken care of by the streaming client and ROS.
+    """
     def __init__(self, pub_img_left, pub_img_right, pub_imu, bridge):
         self.img_data = None
         self.imu_data = None
@@ -71,7 +77,6 @@ class DataQueuingObserver:
         self.bridge = bridge
 
     def on_image_received(self, image, record):
-        # self.img_data = (image, record.capture_timestamp_ns, record.camera_id)
         timestamp = record.capture_timestamp_ns
         camera_id = record.camera_id
         if camera_id == aria.CameraId.Slam1:
@@ -83,10 +88,7 @@ class DataQueuingObserver:
                 self.bridge, np.rot90(image, -1), timestamp)
             self.pub_img_right.publish(img_msg)
 
-
     def on_imu_received(self, samples, imu_idx):
-        # need to use imu_idx to determine IMU
-        # self.imu_data = (samples, imu_idx)
         if imu_idx == 0:
             for imu_data in samples:
                 imu_msg = create_imu_msg(imu_data)
@@ -102,8 +104,8 @@ def setup_ros_node(freq=10):
     pub_img_right = rospy.Publisher('camera_slam_right', Image, queue_size=50)
 
     bridge = CvBridge()
-    # Set the rate of publishing
-    rate = rospy.Rate(freq) # 10hz
+    # Set the rate of the main loop for logging, doesn't affect actual data rate
+    rate = rospy.Rate(freq)
     return pub_imu, pub_img_left, pub_img_right, bridge, rate
 
 def main():
@@ -128,22 +130,7 @@ def main():
     # Main loop for ROS
     with ctrl_c_handler() as ctrl_c:
         while not (rospy.is_shutdown() or ctrl_c):
-            # if observer.img_data is not None:
-            #     img_data, timestamp, camera_id = observer.img_data
-            #     if camera_id == aria.CameraId.Slam1:
-            #         img_msg = create_img_msg(
-            #             bridge, np.rot90(img_data, -1), timestamp)
-            #         pub_img.publish(img_msg)
-            #         observer.img_data = None
-            # elif observer.imu_data is not None:
-            #     imu_data_batch, imu_idx = observer.imu_data
-            #     if imu_idx == 0:
-            #         for imu_data in imu_data_batch:
-            #             imu_msg = create_imu_msg(imu_data)
-            #             pub_imu.publish(imu_msg)
-            #         observer.imu_data = None
-
-            # dummy loop
+            # dummy loop, work is done in the observer callbacks above
             print("publishing")
             rate.sleep()
 
