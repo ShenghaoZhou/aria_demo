@@ -36,13 +36,14 @@ def create_imu_msg(aria_imu_data):
     return imu_msg
 
 
-def setup_streaming_manager(streaming_interface='usb', profile_name='profile12'):
+def setup_streaming_manager(streaming_interface='usb', profile_name='profile12', device_ip=None):
     # profile 12 is the recommended profile for streaming without audio
     device_client = aria.DeviceClient()
 
     client_config = aria.DeviceClientConfig()
-    # if args.device_ip:
-    #     client_config.ip_v4_address = args.device_ip
+    if streaming_interface == "wifi":
+        assert device_ip is not None, "Please provide the device IP address"
+        client_config.ip_v4_address = device_ip
     device_client.set_client_config(client_config)
     device = device_client.connect()
     streaming_manager = device.streaming_manager
@@ -112,7 +113,7 @@ def main():
 
     pub_imu, pub_img_left, pub_img_right, bridge, rate = setup_ros_node(freq=10)
 
-    streaming_manager, device_client, device = setup_streaming_manager()
+    streaming_manager, device_client, device = setup_streaming_manager(streaming_interface='wifi', device_ip="192.168.1.43")
 
     observer = DataQueuingObserver(pub_img_left, pub_img_right, pub_imu, bridge)
     streaming_client = streaming_manager.streaming_client
