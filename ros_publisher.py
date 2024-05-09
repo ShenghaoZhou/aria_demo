@@ -100,7 +100,7 @@ def setup_ros_node(freq=10):
     rospy.init_node('aria_publisher_node', anonymous=True)
 
     # Create a publisher object
-    pub_imu = rospy.Publisher('imu_left', Imu, queue_size=1000)
+    pub_imu = rospy.Publisher('imu_right', Imu, queue_size=1000)
     pub_img_left = rospy.Publisher('camera_slam_left', Image, queue_size=50)
     pub_img_right = rospy.Publisher('camera_slam_right', Image, queue_size=50)
 
