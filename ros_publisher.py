@@ -82,11 +82,11 @@ class DataQueuingObserver:
         camera_id = record.camera_id
         if camera_id == aria.CameraId.Slam1:
             img_msg = create_img_msg(
-                self.bridge, np.rot90(image, -1), timestamp)
+                self.bridge, image, timestamp)
             self.pub_img_left.publish(img_msg)
         elif camera_id == aria.CameraId.Slam2:
             img_msg = create_img_msg(
-                self.bridge, np.rot90(image, -1), timestamp)
+                self.bridge, image, timestamp)
             self.pub_img_right.publish(img_msg)
 
     def on_imu_received(self, samples, imu_idx):
